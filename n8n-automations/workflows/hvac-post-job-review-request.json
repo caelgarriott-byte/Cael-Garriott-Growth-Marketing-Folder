@@ -1,0 +1,6 @@
+{
+  "name": "HVAC Post-Job Review Request",
+  "description": "Sends a review request 2 hours after job completion, then a personalized follow-up 48 hours later. Emergency jobs get a maintenance plan offer; standard jobs get a gentle review nudge.",
+  "trigger": "Webhook — POST /hvac-job-complete",
+  "nodes": ["Webhook", "Wait (2hr)", "Gmail", "Wait (48hr)", "IF (emergency vs standard)", "Gmail x2"]
+}

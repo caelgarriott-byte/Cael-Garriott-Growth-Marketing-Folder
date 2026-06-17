@@ -1,0 +1,271 @@
+{
+  "name": "AI UGC — Creative Pipeline",
+  "description": "Branch 1: Manual trigger generates AI UGC scripts and logs to Sheets. Branch 2: Every 15 min, submits queued variants to Higgsfield, polls for video completion, marks rows ready.",
+  "nodes": [
+    {
+      "id": "a8b34b2e-72db-4b6f-8974-35ccee4139ca",
+      "name": "Run Generator",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 112]
+    },
+    {
+      "id": "56062775-da3c-4f2c-817f-571093da93da",
+      "name": "Set Campaign Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [224, 112],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            { "id": "brand", "name": "brand", "value": "PASTE_BRAND_NAME", "type": "string" },
+            { "id": "product", "name": "product", "value": "PASTE_PRODUCT_DESCRIPTION", "type": "string" },
+            { "id": "num_variants", "name": "num_variants", "value": 5, "type": "number" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "a871fd5c-3445-4f0b-bce7-3ae37783e56e",
+      "name": "Generate Variant Scripts",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [448, 112],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Generate {{ $json.num_variants }} unique TikTok UGC test video scripts for {{ $json.brand }}, product: {{ $json.product }}.\n\nEach variant must use a DIFFERENT combination of:\n- hook_type: one of [bold claim, question hook, shock stat, story opener, controversy hook]\n- cta_type: one of [link in bio, follow for more, comment below, duet this, save this]\n- video_format: one of [talking head, voiceover + b-roll, text on screen, product demo, reaction]\n\nFor each variant, write a complete 30-45 second TikTok script (80-120 words). Make hooks scroll-stopping. CTAs should feel natural.\n\nReturn ONLY valid JSON matching the required schema.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an expert TikTok UGC creative strategist who writes high-converting short-form video scripts. Always return valid JSON only — no extra text."
+        }
+      }
+    },
+    {
+      "id": "d9966dd0-1d15-4069-a262-90d3d96473bd",
+      "name": "OpenAI GPT",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [464, 336],
+      "parameters": {
+        "model": { "__rl": true, "mode": "list", "value": "gpt-4o-mini" },
+        "responsesApiEnabled": false
+      }
+    },
+    {
+      "id": "237f4b03-e4d4-4e3e-a9cc-9f98a7de56ac",
+      "name": "Variant JSON Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [592, 336],
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{ \"variants\": [{ \"hook_type\": \"bold claim\", \"hook_text\": \"Most brands are lying to you.\", \"cta_type\": \"link in bio\", \"cta_text\": \"Check the link in bio for more.\", \"video_format\": \"talking head\", \"script\": \"Full 30-45 second TikTok script here.\" }] }"
+      }
+    },
+    {
+      "id": "057b021f-beed-456f-9e89-71699f6a38b2",
+      "name": "Split Variants Into Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [800, 112],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nconst variants = items[0].json.variants || [];\nconst now = new Date().toISOString();\nreturn variants.map((v, i) => ({\n  json: {\n    variant_id: 'var_' + Date.now() + '_' + i,\n    hook_type: v.hook_type,\n    hook_text: v.hook_text,\n    cta_type: v.cta_type,\n    cta_text: v.cta_text,\n    video_format: v.video_format,\n    script: v.script,\n    status: 'queued',\n    video_url: '',\n    higgsfield_job_id: '',\n    posted_at: '',\n    created_at: now\n  }\n}));"
+      }
+    },
+    {
+      "id": "90f0124a-6ca3-4df0-b8c8-c0cb9925c0e8",
+      "name": "Log Variants to Queue",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1024, 112],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "url", "value": "PASTE_GOOGLE_SHEET_URL" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Variants" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "variant_id": "={{ $json.variant_id }}",
+            "hook_type": "={{ $json.hook_type }}",
+            "hook_text": "={{ $json.hook_text }}",
+            "cta_type": "={{ $json.cta_type }}",
+            "cta_text": "={{ $json.cta_text }}",
+            "video_format": "={{ $json.video_format }}",
+            "script": "={{ $json.script }}",
+            "status": "={{ $json.status }}",
+            "video_url": "={{ $json.video_url }}",
+            "higgsfield_job_id": "={{ $json.higgsfield_job_id }}",
+            "posted_at": "={{ $json.posted_at }}",
+            "created_at": "={{ $json.created_at }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "4ade183b-dd44-4623-9eb8-445f04025731",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 528],
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] } }
+    },
+    {
+      "id": "56bb8ba6-87fa-4655-8ec7-9d238ff8ecff",
+      "name": "Read Queued Variants",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [224, 528],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "url", "value": "PASTE_GOOGLE_SHEET_URL" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Variants" },
+        "filtersUI": { "values": [{ "lookupColumn": "status", "lookupValue": "queued" }] },
+        "options": { "returnAllMatches": "returnAllMatches" }
+      }
+    },
+    {
+      "id": "c5c49a79-7714-4d37-850a-75ca5eb399e6",
+      "name": "Submit to Higgsfield API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [448, 528],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.higgsfield.ai/v1/generation",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": {
+          "script": "={{ $json.script }}",
+          "aspect_ratio": "9:16",
+          "duration": 30,
+          "style": "ugc_authentic",
+          "avatar": "auto",
+          "metadata": {
+            "variant_id": "={{ $json.variant_id }}",
+            "hook_type": "={{ $json.hook_type }}",
+            "video_format": "={{ $json.video_format }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "38f7728d-d27f-4c95-9d4b-91db6c5f754d",
+      "name": "Update Status: Generating",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [672, 528],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "url", "value": "PASTE_GOOGLE_SHEET_URL" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Variants" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": ["variant_id"],
+          "value": {
+            "variant_id": "={{ $json.variant_id }}",
+            "status": "video_generating",
+            "higgsfield_job_id": "={{ $json.job_id ?? $json.id ?? \"\" }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "bea179a1-36dd-4c91-8ea2-bb68cef49909",
+      "name": "Wait 3 Minutes",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [896, 528],
+      "parameters": { "resume": "timeInterval", "amount": 3, "unit": "minutes" }
+    },
+    {
+      "id": "0b9e2d3d-3f3b-40ae-9998-48377a40ae69",
+      "name": "Poll Higgsfield Job Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1120, 528],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.higgsfield.ai/v1/generation/{{ $json.higgsfield_job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth"
+      }
+    },
+    {
+      "id": "1b838d98-9e43-4e4c-9aee-64fb443aa6c6",
+      "name": "Video Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1344, 528],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [{ "leftValue": "={{ $json.status }}", "operator": { "type": "string", "operation": "equals" }, "rightValue": "completed" }],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "1b5f8250-6d8a-46ac-8202-d1d666995dbc",
+      "name": "Update Status: Ready",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1568, 432],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "update",
+        "documentId": { "__rl": true, "mode": "url", "value": "PASTE_GOOGLE_SHEET_URL" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Variants" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "matchingColumns": ["higgsfield_job_id"],
+          "value": {
+            "higgsfield_job_id": "={{ $json.id }}",
+            "status": "ready",
+            "video_url": "={{ $json.output_url ?? $json.video_url ?? \"\" }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "b45440f2-8e10-4dff-a670-08305c415187",
+      "name": "Still Processing — Skip",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1568, 624],
+      "parameters": {
+        "mode": "manual",
+        "assignments": { "assignments": [{ "id": "note", "name": "note", "value": "Video still generating. Will retry next run.", "type": "string" }] }
+      }
+    }
+  ],
+  "connections": {
+    "Run Generator": { "main": [[{ "node": "Set Campaign Config", "type": "main", "index": 0 }]] },
+    "Set Campaign Config": { "main": [[{ "node": "Generate Variant Scripts", "type": "main", "index": 0 }]] },
+    "Generate Variant Scripts": { "main": [[{ "node": "Split Variants Into Rows", "type": "main", "index": 0 }]] },
+    "OpenAI GPT": { "ai_languageModel": [[{ "node": "Generate Variant Scripts", "type": "ai_languageModel", "index": 0 }]] },
+    "Variant JSON Parser": { "ai_outputParser": [[{ "node": "Generate Variant Scripts", "type": "ai_outputParser", "index": 0 }]] },
+    "Split Variants Into Rows": { "main": [[{ "node": "Log Variants to Queue", "type": "main", "index": 0 }]] },
+    "Every 15 Minutes": { "main": [[{ "node": "Read Queued Variants", "type": "main", "index": 0 }]] },
+    "Read Queued Variants": { "main": [[{ "node": "Submit to Higgsfield API", "type": "main", "index": 0 }]] },
+    "Submit to Higgsfield API": { "main": [[{ "node": "Update Status: Generating", "type": "main", "index": 0 }]] },
+    "Update Status: Generating": { "main": [[{ "node": "Wait 3 Minutes", "type": "main", "index": 0 }]] },
+    "Wait 3 Minutes": { "main": [[{ "node": "Poll Higgsfield Job Status", "type": "main", "index": 0 }]] },
+    "Poll Higgsfield Job Status": { "main": [[{ "node": "Video Ready?", "type": "main", "index": 0 }]] },
+    "Video Ready?": {
+      "main": [
+        [{ "node": "Update Status: Ready", "type": "main", "index": 0 }],
+        [{ "node": "Still Processing — Skip", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "aiBuilderAssisted": true }
+}

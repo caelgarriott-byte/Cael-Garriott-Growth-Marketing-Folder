@@ -1,0 +1,6 @@
+{
+  "name": "Google Review Monitor & AI Responder",
+  "description": "Monitors Google Business reviews every 2 hours. AI writes personalized responses — warm for 4-5 star reviews, empathetic for 1-3 stars — and auto-posts them. Logs every review and response to Google Sheets.",
+  "trigger": "Schedule — every 2 hours",
+  "nodes": ["Schedule Trigger", "HTTP Request (get reviews)", "Split Out", "Filter (unanswered)", "AI Agent (GPT)", "HTTP Request (post reply)", "Google Sheets (log)"]
+}

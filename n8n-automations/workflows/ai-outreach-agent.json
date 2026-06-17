@@ -1,0 +1,6 @@
+{
+  "name": "AI Outreach Agent",
+  "description": "Reads a lead list from Google Sheets, writes a personalized value-first cold outreach email for each contact using GPT, sends it from Gmail, and updates the sheet with status, timestamp, and the message sent.",
+  "trigger": "Manual trigger",
+  "nodes": ["Manual Trigger", "Google Sheets (read)", "Filter (has email + not contacted)", "Limit (5/run)", "AI Agent (GPT)", "Structured Output Parser", "Gmail (send)", "Google Sheets (update status)"]
+}

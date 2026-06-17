@@ -1,0 +1,6 @@
+{
+  "name": "Appointment Reminder Sequence",
+  "description": "Automated 3-email appointment reminder sequence. Sends instant booking confirmation, 24hr reminder, and 2hr tech-arriving-soon email using Luxon date calculations.",
+  "trigger": "Webhook — POST /appointment-booked",
+  "nodes": ["Webhook", "Gmail (confirmation)", "Wait (until 24hr before)", "Gmail (reminder)", "Wait (until 2hr before)", "Gmail (arriving soon)"]
+}

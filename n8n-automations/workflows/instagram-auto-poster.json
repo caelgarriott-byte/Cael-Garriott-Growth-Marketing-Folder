@@ -1,0 +1,6 @@
+{
+  "name": "Instagram Auto-Poster",
+  "description": "Checks Google Sheets daily for scheduled posts, publishes them to Instagram via Meta Graph API, and marks them as Posted.",
+  "trigger": "Schedule — daily at 9am",
+  "nodes": ["Schedule Trigger", "Google Sheets (read)", "Filter", "Set", "HTTP Request x2", "Google Sheets (update)"]
+}

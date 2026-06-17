@@ -1,0 +1,6 @@
+{
+  "name": "AI Customer Support Auto-Reply",
+  "description": "AI triage system for customer support emails. Reads every incoming email, answers common questions instantly using a FAQ knowledge base, and escalates anything it cannot handle to a human with full context and AI notes.",
+  "trigger": "Gmail Trigger — polls every minute",
+  "nodes": ["Gmail Trigger", "AI Agent (GPT)", "Structured Output Parser", "IF (can AI answer?)", "Gmail (auto-reply)", "Gmail (human escalation alert)"]
+}

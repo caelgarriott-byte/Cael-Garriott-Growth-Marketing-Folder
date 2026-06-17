@@ -1,0 +1,183 @@
+{
+  "name": "AI UGC — Analytics & Reporting",
+  "description": "Branch 1: Every 48hrs, fetches TikTok metrics for posted videos and logs performance snapshots. Branch 2: Every Monday at 8am, runs AI analysis across all variants and performance data and emails a winner report.",
+  "nodes": [
+    {
+      "id": "22751cc9-2eb3-4f72-8666-80b523bfa137",
+      "name": "Every 48 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 48 }] } }
+    },
+    {
+      "id": "0a429af7-5adc-4fbc-bdf9-aabba73fd2df",
+      "name": "Read Posted Videos",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [224, 0],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "url", "value": "PASTE_GOOGLE_SHEET_URL" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Variants" },
+        "filtersUI": { "values": [{ "lookupColumn": "status", "lookupValue": "posted" }] },
+        "options": { "returnAllMatches": "returnAllMatches" }
+      }
+    },
+    {
+      "id": "fceb57e8-efce-4a1f-aabc-a751b94ef0d4",
+      "name": "Fetch TikTok Video Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [448, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.tiktokapis.com/v2/video/query/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json; charset=UTF-8" }] },
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": { "parameters": [{ "name": "fields", "value": "id,view_count,like_count,comment_count,share_count,play_count,average_time_watched,video_duration" }] },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": { "filters": { "video_ids": ["={{ $json.tiktok_video_id }}"] } }
+      }
+    },
+    {
+      "id": "60880fa1-01c4-4f8e-9571-b6b687f075eb",
+      "name": "Calculate Engagement Rate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [672, 0],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const v = $json.data?.videos?.[0] || $json;\nconst views = v.view_count || v.play_count || 0;\nconst likes = v.like_count || 0;\nconst comments = v.comment_count || 0;\nconst shares = v.share_count || 0;\nconst engagement_rate = views > 0 ? ((likes + comments + shares) / views * 100).toFixed(2) : '0.00';\nconst avg_watch_pct = v.average_time_watched && v.video_duration ? (v.average_time_watched / v.video_duration * 100).toFixed(1) : '0.0';\nreturn {\n  json: {\n    tiktok_video_id: v.id || $('Read Posted Videos').item.json.tiktok_video_id,\n    variant_id: $('Read Posted Videos').item.json.variant_id,\n    hook_type: $('Read Posted Videos').item.json.hook_type,\n    cta_type: $('Read Posted Videos').item.json.cta_type,\n    video_format: $('Read Posted Videos').item.json.video_format,\n    views,\n    likes,\n    comments,\n    shares,\n    engagement_rate: parseFloat(engagement_rate),\n    avg_watch_pct: parseFloat(avg_watch_pct),\n    collected_at: new Date().toISOString()\n  }\n};"
+      }
+    },
+    {
+      "id": "cf4f2cd9-17e3-492c-9a58-3a6b885ed07b",
+      "name": "Append Performance Data",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [896, 0],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "append",
+        "documentId": { "__rl": true, "mode": "url", "value": "PASTE_GOOGLE_SHEET_URL" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Performance" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "variant_id": "={{ $json.variant_id }}",
+            "tiktok_video_id": "={{ $json.tiktok_video_id }}",
+            "hook_type": "={{ $json.hook_type }}",
+            "cta_type": "={{ $json.cta_type }}",
+            "video_format": "={{ $json.video_format }}",
+            "views": "={{ $json.views }}",
+            "likes": "={{ $json.likes }}",
+            "comments": "={{ $json.comments }}",
+            "shares": "={{ $json.shares }}",
+            "engagement_rate": "={{ $json.engagement_rate }}",
+            "avg_watch_pct": "={{ $json.avg_watch_pct }}",
+            "collected_at": "={{ $json.collected_at }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "9b095953-dd39-4bb1-a3f2-6f12f7869a52",
+      "name": "Every Monday at 8am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 336],
+      "parameters": { "rule": { "interval": [{ "field": "weeks", "weeksInterval": 1, "triggerAtDay": [1], "triggerAtHour": 8, "triggerAtMinute": 0 }] } }
+    },
+    {
+      "id": "328f42ff-6d76-42bf-81c9-923ac3f4f91c",
+      "name": "Read All Variants",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [224, 336],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "url", "value": "PASTE_GOOGLE_SHEET_URL" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Variants" },
+        "options": { "returnAllMatches": "returnAllMatches" }
+      }
+    },
+    {
+      "id": "a21f8a8f-de2a-4c8b-a9f7-51cda913f620",
+      "name": "Read All Performance",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [448, 336],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "read",
+        "documentId": { "__rl": true, "mode": "url", "value": "PASTE_GOOGLE_SHEET_URL" },
+        "sheetName": { "__rl": true, "mode": "name", "value": "Performance" },
+        "options": { "returnAllMatches": "returnAllMatches" }
+      }
+    },
+    {
+      "id": "af2ba623-4d17-45b7-86d1-5ff2d85641ea",
+      "name": "AI Winner Analysis",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [672, 336],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this TikTok UGC test data and write a weekly performance report.\n\nVARIANT SCRIPTS:\n{{ $(\"Read All Variants\").all().map(i => JSON.stringify(i.json)).join(\"\\n\") }}\n\nPERFORMANCE DATA:\n{{ $(\"Read All Performance\").all().map(i => JSON.stringify(i.json)).join(\"\\n\") }}\n\nYour analysis must include:\n1. WINNERS: Top 3 variants by views and by engagement rate\n2. HOOK TYPE RANKING: Rank all hook types by average views and engagement rate\n3. CTA RANKING: Rank all CTA types by average engagement rate\n4. VIDEO FORMAT RANKING: Rank all video formats by average views\n5. WINNING FORMULA: Best hook_type + cta_type + video_format combination\n6. BUDGET RECOMMENDATION: Which hook + format to scale and why\n7. WHAT TO TEST NEXT: 2-3 new variant ideas based on data gaps\n\nFormat as clean HTML with headers and a summary table at the top. Include actual numbers.",
+        "options": {
+          "systemMessage": "You are a TikTok growth strategist and performance marketing analyst. Turn raw UGC test data into clear, actionable insights for creative budget decisions. Be direct and data-driven."
+        }
+      }
+    },
+    {
+      "id": "15c56341-9e83-44b2-b4b7-f9470cbda31c",
+      "name": "OpenAI GPT",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [752, 560],
+      "parameters": {
+        "model": { "__rl": true, "mode": "list", "value": "gpt-4o-mini" },
+        "responsesApiEnabled": false
+      }
+    },
+    {
+      "id": "58bf7c94-5f49-482e-8b83-cc6f6f176476",
+      "name": "Email Weekly Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1024, 336],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "PASTE_YOUR_EMAIL",
+        "subject": "=TikTok UGC Winner Report — Week of {{ $now.toFormat(\"MMM d, yyyy\") }}",
+        "emailType": "html",
+        "message": "={{ $json.output }}",
+        "options": { "appendAttribution": false }
+      }
+    }
+  ],
+  "connections": {
+    "Every 48 Hours": { "main": [[{ "node": "Read Posted Videos", "type": "main", "index": 0 }]] },
+    "Read Posted Videos": { "main": [[{ "node": "Fetch TikTok Video Metrics", "type": "main", "index": 0 }]] },
+    "Fetch TikTok Video Metrics": { "main": [[{ "node": "Calculate Engagement Rate", "type": "main", "index": 0 }]] },
+    "Calculate Engagement Rate": { "main": [[{ "node": "Append Performance Data", "type": "main", "index": 0 }]] },
+    "Every Monday at 8am": { "main": [[{ "node": "Read All Variants", "type": "main", "index": 0 }]] },
+    "Read All Variants": { "main": [[{ "node": "Read All Performance", "type": "main", "index": 0 }]] },
+    "Read All Performance": { "main": [[{ "node": "AI Winner Analysis", "type": "main", "index": 0 }]] },
+    "OpenAI GPT": { "ai_languageModel": [[{ "node": "AI Winner Analysis", "type": "ai_languageModel", "index": 0 }]] },
+    "AI Winner Analysis": { "main": [[{ "node": "Email Weekly Report", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "meta": { "aiBuilderAssisted": true }
+}

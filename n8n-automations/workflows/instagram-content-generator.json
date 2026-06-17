@@ -1,0 +1,6 @@
+{
+  "name": "Instagram Content Generator",
+  "description": "Generates 7 Instagram posts weekly using GPT, queues them in Google Sheets, and emails a Canva image checklist.",
+  "trigger": "Schedule — every Monday at 8am",
+  "nodes": ["Schedule Trigger", "AI Agent (GPT)", "Structured Output Parser", "Split Out", "Set", "Google Sheets (append)", "Gmail"]
+}

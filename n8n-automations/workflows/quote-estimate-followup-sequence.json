@@ -1,0 +1,6 @@
+{
+  "name": "Quote & Estimate Follow-Up Sequence",
+  "description": "3-touch automated follow-up sequence for unsent quotes. Sends a friendly check-in at day 1, a value-add email at day 3, and an urgency close at day 7. Works for any contractor or service business.",
+  "trigger": "Webhook — POST /quote-sent",
+  "nodes": ["Webhook", "Wait (1 day)", "Gmail (check-in)", "Wait (2 days)", "Gmail (value-add)", "Wait (4 days)", "Gmail (urgency close)"]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Speed-to-Lead AI Responder",
+  "description": "AI-powered lead response system. When a new lead submits a contact form, GPT reads their message and sends a personalized reply within 60 seconds. Business owner gets an instant alert with full lead details.",
+  "trigger": "Webhook — POST /new-lead",
+  "nodes": ["Webhook", "AI Agent (GPT)", "Structured Output Parser", "Gmail (lead reply)", "Gmail (owner alert)"]
+}
